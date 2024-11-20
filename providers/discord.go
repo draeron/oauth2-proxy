@@ -99,8 +99,6 @@ type discordUserInfo struct {
 	Email         string `json:"email"`
 	Verified      bool   `json:"verified"`
 	Discriminator string `json:"discriminator"`
-	// Avatar   string `json:"avatar"`
-	// Flags    int    `json:"flags"`
 }
 
 // Retrive user Info
