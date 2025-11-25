@@ -188,13 +188,11 @@ func parseCodeChallengeMethod(providerConfig options.Provider) string {
 
 func providerRequiresOIDCProviderVerifier(providerType options.ProviderType) (bool, error) {
 	switch providerType {
-	case options.BitbucketProvider, options.DiscordProvider, options.DigitalOceanProvider, options.FacebookProvider, options.GitHubProvider,
-		options.GoogleProvider, options.KeycloakProvider, options.LinkedInProvider, options.LoginGovProvider, options.NextCloudProvider:
 	case options.BitbucketProvider, options.DigitalOceanProvider, options.FacebookProvider, options.GitHubProvider,
 		options.GoogleProvider, options.KeycloakProvider, options.LinkedInProvider, options.LoginGovProvider,
 		options.NextCloudProvider, options.SourceHutProvider:
 		return false, nil
-	case options.OIDCProvider, options.ADFSProvider, options.AzureProvider, options.CidaasProvider,
+	case options.OIDCProvider, options.ADFSProvider, options.AzureProvider, options.CidaasProvider, options.DiscordProvider,
 		options.GitLabProvider, options.KeycloakOIDCProvider, options.MicrosoftEntraIDProvider:
 		return true, nil
 	default:
