@@ -47,6 +47,8 @@ func NewProvider(providerConfig options.Provider) (Provider, error) {
 		return NewBitbucketProvider(providerData, providerConfig.BitbucketConfig), nil
 	case options.CidaasProvider:
 		return NewCIDAASProvider(providerData, providerConfig), nil
+	case options.DiscordProvider:
+		return NewDiscordProvider(providerData, providerConfig.DiscordConfig), nil
 	case options.DigitalOceanProvider:
 		return NewDigitalOceanProvider(providerData), nil
 	case options.FacebookProvider:
@@ -188,7 +190,7 @@ func providerRequiresOIDCProviderVerifier(providerType options.ProviderType) (bo
 	switch providerType {
 	case options.BitbucketProvider, options.DigitalOceanProvider, options.FacebookProvider, options.GitHubProvider,
 		options.GoogleProvider, options.KeycloakProvider, options.LinkedInProvider, options.LoginGovProvider,
-		options.NextCloudProvider, options.SourceHutProvider:
+		options.NextCloudProvider, options.SourceHutProvider, options.DiscordProvider:
 		return false, nil
 	case options.OIDCProvider, options.ADFSProvider, options.AzureProvider, options.CidaasProvider,
 		options.GitLabProvider, options.KeycloakOIDCProvider, options.MicrosoftEntraIDProvider:
