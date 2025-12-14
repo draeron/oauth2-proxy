@@ -514,6 +514,7 @@ type LegacyProvider struct {
 	BitbucketTeam                          string   `flag:"bitbucket-team" cfg:"bitbucket_team"`
 	BitbucketWorkspace                     string   `flag:"bitbucket-workspace" cfg:"bitbucket_workspace"`
 	BitbucketRepository                    string   `flag:"bitbucket-repository" cfg:"bitbucket_repository"`
+	DiscordGuilds                          []string `flag:"discord-guild-id" cfg:"discord_guild_ids"`
 	GitHubOrg                              string   `flag:"github-org" cfg:"github_org"`
 	GitHubTeam                             string   `flag:"github-team" cfg:"github_team"`
 	GitHubRepo                             string   `flag:"github-repo" cfg:"github_repo"`
@@ -584,6 +585,7 @@ func legacyProviderFlagSet() *pflag.FlagSet {
 	flagSet.String("bitbucket-team", "", "[deprecated, use bitbucket-workspace instead] restrict logins to members of this team")
 	flagSet.String("bitbucket-workspace", "", "restrict logins to members of this workspace, use workspace slug (eg. `myworkspace`) instead of workspace name (eg. `My Workspace`)")
 	flagSet.String("bitbucket-repository", "", "restrict logins to user with access to this repository")
+	flagSet.StringSlice("discord-guild-id", []string{}, "restrict logins to members of this Discord server (may be given multiple times)")
 	flagSet.String("github-org", "", "restrict logins to members of this organisation")
 	flagSet.String("github-team", "", "restrict logins to members of this team")
 	flagSet.String("github-repo", "", "restrict logins to collaborators of this repository")
@@ -755,6 +757,10 @@ func (l *LegacyProvider) convert() (Providers, error) {
 			Repo:  l.GitHubRepo,
 			Token: l.GitHubToken,
 			Users: l.GitHubUsers,
+		}
+	case "discord":
+		provider.DiscordConfig = DiscordOptions{
+			Guilds: l.DiscordGuilds,
 		}
 	case "keycloak-oidc":
 		provider.KeycloakConfig = KeycloakOptions{

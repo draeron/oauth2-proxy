@@ -81,7 +81,9 @@ type Provider struct {
 	// ADFSConfig holds all configurations for ADFS provider.
 	ADFSConfig ADFSOptions `yaml:"ADFSConfig,omitempty"`
 	// BitbucketConfig holds all configurations for Bitbucket provider.
-	BitbucketConfig BitbucketOptions `yaml:"bitbucketConfig,omitempty"`
+	BitbucketConfig BitbucketOptions `json:"bitbucketConfig,omitempty"`
+	// DiscordConfig holds all configurations for Discord provider.
+	DiscordConfig DiscordOptions `json:"discordConfig,omitempty"`
 	// GitHubConfig holds all configurations for GitHubC provider.
 	GitHubConfig GitHubOptions `yaml:"githubConfig,omitempty"`
 	// GitLabConfig holds all configurations for GitLab provider.
@@ -162,6 +164,9 @@ const (
 
 	// CidaasProvider is the provider type for Cidaas IDP
 	CidaasProvider ProviderType = "cidaas"
+
+	// DiscordProvider is the provider type for Discord
+	DiscordProvider ProviderType = "discord"
 
 	// DigitalOceanProvider is the provider type for DigitalOcean
 	DigitalOceanProvider ProviderType = "digitalocean"
@@ -257,6 +262,11 @@ type GitHubOptions struct {
 	// Users allows users with these usernames to login
 	// even if they do not belong to the specified org and team or collaborators
 	Users []string `yaml:"users,omitempty"`
+}
+
+type DiscordOptions struct {
+	// Restrict logins to certain guilds
+	Guilds []string `json:"guilds,omitempty"`
 }
 
 type GitLabOptions struct {
