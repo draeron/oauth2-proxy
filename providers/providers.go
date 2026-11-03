@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
 	internaloidc "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/providers/oidc"
-	k8serrors "k8s.io/apimachinery/pkg/util/errors"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/util/ptr"
 )
 
 const (
@@ -85,6 +86,7 @@ func newProviderDataFromConfig(providerConfig options.Provider) (*ProviderData, 
 		ClientSecret:            providerConfig.ClientSecret,
 		ClientSecretFile:        providerConfig.ClientSecretFile,
 		AuthRequestResponseMode: providerConfig.AuthRequestResponseMode,
+		AdditionalClaims:        providerConfig.AdditionalClaims,
 	}
 
 	needsVerifier, err := providerRequiresOIDCProviderVerifier(providerConfig.Type)
@@ -100,8 +102,9 @@ func newProviderDataFromConfig(providerConfig options.Provider) (*ProviderData, 
 			IssuerURL:              providerConfig.OIDCConfig.IssuerURL,
 			JWKsURL:                providerConfig.OIDCConfig.JwksURL,
 			PublicKeyFiles:         providerConfig.OIDCConfig.PublicKeyFiles,
-			SkipDiscovery:          providerConfig.OIDCConfig.SkipDiscovery,
-			SkipIssuerVerification: providerConfig.OIDCConfig.InsecureSkipIssuerVerification,
+			SupportedSigningAlgs:   providerConfig.OIDCConfig.EnabledSigningAlgs,
+			SkipDiscovery:          ptr.Deref(providerConfig.OIDCConfig.SkipDiscovery, options.DefaultSkipDiscovery),
+			SkipIssuerVerification: ptr.Deref(providerConfig.OIDCConfig.InsecureSkipIssuerVerification, options.DefaultInsecureSkipIssuerVerification),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("error building OIDC ProviderVerifier: %v", err)
@@ -141,14 +144,14 @@ func newProviderDataFromConfig(providerConfig options.Provider) (*ProviderData, 
 	errs = append(errs, p.compileLoginParams(providerConfig.LoginURLParameters)...)
 
 	if len(errs) > 0 {
-		return nil, k8serrors.NewAggregate(errs)
+		return nil, errors.Join(errs...)
 	}
 
 	// Make the OIDC options available to all providers that support it
-	p.AllowUnverifiedEmail = providerConfig.OIDCConfig.InsecureAllowUnverifiedEmail
+	p.AllowUnverifiedEmail = ptr.Deref(providerConfig.OIDCConfig.InsecureAllowUnverifiedEmail, options.DefaultInsecureAllowUnverifiedEmail)
 	p.EmailClaim = providerConfig.OIDCConfig.EmailClaim
 	p.GroupsClaim = providerConfig.OIDCConfig.GroupsClaim
-	p.SkipClaimsFromProfileURL = providerConfig.SkipClaimsFromProfileURL
+	p.SkipClaimsFromProfileURL = ptr.Deref(providerConfig.SkipClaimsFromProfileURL, options.DefaultSkipClaimsFromProfileURL)
 
 	// Set PKCE enabled or disabled based on discovery and force options
 	p.CodeChallengeMethod = parseCodeChallengeMethod(providerConfig)

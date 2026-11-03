@@ -10,6 +10,7 @@ import (
 	middlewareapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/middleware"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/app/pagewriter"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/util/ptr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -60,30 +61,30 @@ var _ = Describe("Proxy Suite", func() {
 						{
 							ID:         "static-backend",
 							Path:       "/static/",
-							Static:     true,
+							Static:     ptr.To(true),
 							StaticCode: &ok,
 						},
 						{
 							ID:         "static-backend-no-trailing-slash",
 							Path:       "/static",
-							Static:     true,
+							Static:     ptr.To(true),
 							StaticCode: &accepted,
 						},
 						{
 							ID:         "static-backend-long",
 							Path:       "/static/long",
-							Static:     true,
+							Static:     ptr.To(true),
 							StaticCode: &accepted,
 						},
 						{
 							ID:   "bad-http-backend",
 							Path: "/bad-http/",
-							URI:  "http://::1",
+							URI:  invalidServer,
 						},
 						{
 							ID:         "single-path-backend",
 							Path:       "/single-path",
-							Static:     true,
+							Static:     ptr.To(true),
 							StaticCode: &ok,
 						},
 						{
@@ -346,7 +347,7 @@ var _ = Describe("Proxy Suite", func() {
 				upstream: "",
 			}),
 			Entry("containing an escaped '/' with ProxyRawPath", &proxyTableInput{
-				upstreams: options.UpstreamConfig{ProxyRawPath: true},
+				upstreams: options.UpstreamConfig{ProxyRawPath: ptr.To(true)},
 				target:    "http://example.localhost/%2F/test1/%2F/test2",
 				response: testHTTPResponse{
 					code: 404,
@@ -378,6 +379,38 @@ var _ = Describe("Proxy Suite", func() {
 					},
 				},
 				upstream: "unix-upstream",
+			}),
+		)
+	})
+
+	Context("multiUpstreamProxy errors", func() {
+		type proxyErrorTableInput struct {
+			upstreams     options.UpstreamConfig
+			expectedError string
+		}
+
+		DescribeTable("NewProxy", func(in *proxyErrorTableInput) {
+			sigData := &options.SignatureData{Hash: crypto.SHA256, Key: "secret"}
+
+			writer := &pagewriter.WriterFuncs{
+				ProxyErrorFunc: func(rw http.ResponseWriter, _ *http.Request, _ error) {
+					rw.WriteHeader(502)
+					rw.Write([]byte("Proxy Error"))
+				},
+			}
+
+			_, err := NewProxy(in.upstreams, sigData, writer)
+			Expect(err).To(MatchError(in.expectedError))
+		},
+			Entry("regex matcher without rewrite target", &proxyErrorTableInput{
+				upstreams: options.UpstreamConfig{
+					Upstreams: []options.Upstream{{
+						ID:   "api",
+						Path: "^/api/$",
+						URI:  "http://example.com",
+					}},
+				},
+				expectedError: `could not register http upstream "api": mux: path must start with a slash, got "^/api/$"`,
 			}),
 		)
 	})

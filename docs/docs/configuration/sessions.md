@@ -64,9 +64,9 @@ the refresh flow to get a new Access-Token. If it is longer, it might be that th
 expired.
 
 The "cookie-refresh" value controls when OAuth2 Proxy tries to refresh an Access-Token. If it is set to "0", the
-Access-Token will never be refreshed, even if it is already expired and a valid Refresh-Token is available. If set, OAuth2-Proxy will
+Access-Token will never be refreshed, even if it is already expired and a valid Refresh-Token is available. If set, OAuth2 Proxy will
 refresh the Access-Token after this many seconds whether it is still valid or not. According to the official OAuth2.0 specification 
-Access-Tokens are not required to follow a specific format. Therefore OAuth2-Proxy cannot check for any expiry date without an 
+Access-Tokens are not required to follow a specific format. Therefore OAuth2 Proxy cannot check for any expiry date without an 
 introspection endpoint. If an Access-Token expires and you have not set a corresponding "cookie-refresh" value, you will likely 
 encounter expiry issues.
 

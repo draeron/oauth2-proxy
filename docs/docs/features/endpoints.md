@@ -15,7 +15,7 @@ OAuth2 Proxy responds directly to the following endpoints. All other endpoints w
 - /oauth2/start - a URL that will redirect to start the OAuth cycle
 - /oauth2/callback - the URL used at the end of the OAuth cycle. The oauth app will be configured with this as the callback url.
 - /oauth2/userinfo - the URL is used to return user's email from the session in JSON format.
-- /oauth2/auth - only returns a 202 Accepted response or a 401 Unauthorized response; for use with the [Nginx `auth_request` directive](../configuration/integration#configuring-for-use-with-the-nginx-auth_request-directive)
+- /oauth2/auth - only returns a 202 Accepted response or a 401 Unauthorized response; for use with the [Nginx `auth_request` directive](../configuration/integrations/nginx)
 - /oauth2/static/\* - stylesheets and other dependencies used in the sign_in and error pages
 
 ### Sign out
@@ -37,6 +37,20 @@ X-Auth-Request-Redirect: https://my-oidc-provider/sign_out_page
 (The "sign_out_page" should be the [`end_session_endpoint`](https://openid.net/specs/openid-connect-session-1_0.html#rfc.section.2.1) from [the metadata](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfig) if your OIDC provider supports Session Management and Discovery.)
 
 BEWARE that the domain you want to redirect to (`my-oidc-provider.example.com` in the example) must be added to the [`--whitelist-domain`](../configuration/overview) configuration option otherwise the redirect will be ignored. Make sure to include the actual domain and port (if needed) and not the URL (e.g "localhost:8081" instead of "http://localhost:8081").
+
+ID Token can be injected in the redirect url by using `{id_token}` placeholder. For example to redirect to `https://my-oidc-provider.example.com/sign_out_page?id_token_hint={id_token}&post_logout_redirect_uri=https://my-app.example.com`;
+
+```
+/oauth2/sign_out?rd=https%3A%2F%2Fmy-oidc-provider.example.com%2Fsign_out_page%3Fid_token_hint%3D%7Bid_token%7D%26post_logout_redirect_uri%3Dhttps%3A%2F%2Fmy-app.example.com
+```
+
+or alternatively in the header:
+
+```
+GET /oauth2/sign_out HTTP/1.1
+X-Auth-Request-Redirect: https://my-oidc-provider.example.com/sign_out_page?id_token_hint={id_token}&post_logout_redirect_uri=https://my-app.example.com
+...
+```
 
 ### Auth
 

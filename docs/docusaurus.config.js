@@ -94,6 +94,11 @@ const config = {
         },
         items: [
           {
+            href: 'https://www.oauth2-proxy.dev',
+            label: 'Home',
+            position: 'left',
+          },
+          {
             type: 'docSidebar',
             sidebarId: 'docs',
             position: 'left',
@@ -105,7 +110,7 @@ const config = {
             dropdownActiveClassDisabled: true,
           },
           {
-            href: 'https://gophers.slack.com/messages/CM2RSS25N',
+            href: 'https://cloud-native.slack.com/archives/C098Y5URZ2N',
             label: 'Slack',
             position: 'right',
           },
@@ -118,7 +123,7 @@ const config = {
       },
       footer: {
         style: 'dark',
-        copyright: `Copyright © ${new Date().getFullYear()} OAuth2 Proxy.`,
+        copyright: `Copyright © ${new Date().getFullYear()} OAuth2 Proxy a Series of LF Projects, LLC.<br>For website terms of use, trademark policy and other project policies please see lfprojects.org/policies/`,
       },
       prism: {
         theme: prismThemes.github,

@@ -19,6 +19,7 @@ import (
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/requests"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/util/ptr"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -108,12 +109,11 @@ func NewGoogleProvider(p *ProviderData, opts options.GoogleOptions) (*GoogleProv
 		},
 	}
 
-	if opts.UseOrganizationID || opts.ServiceAccountJSON != "" || opts.UseApplicationDefaultCredentials {
-
+	if ptr.Deref(opts.UseOrganizationID, options.DefaultGoogleUseOrganizationID) || opts.ServiceAccountJSON != "" || ptr.Deref(opts.UseApplicationDefaultCredentials, options.DefaultUseApplicationDefaultCredentials) {
 		// reuse admin service to avoid multiple calls for token
 		var adminService *admin.Service
 
-		if opts.UseOrganizationID {
+		if ptr.Deref(opts.UseOrganizationID, options.DefaultGoogleUseOrganizationID) {
 			// add user scopes to admin api
 			userScope := getAdminAPIUserScope(opts.AdminAPIUserScope)
 			for index, scope := range possibleScopesList {
@@ -132,7 +132,7 @@ func NewGoogleProvider(p *ProviderData, opts options.GoogleOptions) (*GoogleProv
 			}
 		}
 
-		if opts.ServiceAccountJSON != "" || opts.UseApplicationDefaultCredentials {
+		if opts.ServiceAccountJSON != "" || ptr.Deref(opts.UseApplicationDefaultCredentials, options.DefaultUseApplicationDefaultCredentials) {
 			if adminService == nil {
 				adminService = getAdminService(opts)
 			}
@@ -219,7 +219,7 @@ func (p *GoogleProvider) Redeem(ctx context.Context, redirectURL, code, codeVeri
 
 	err = requests.New(p.RedeemURL.String()).
 		WithContext(ctx).
-		WithMethod("POST").
+		WithMethod(http.MethodPost).
 		WithBody(bytes.NewBufferString(params.Encode())).
 		SetHeader("Content-Type", "application/x-www-form-urlencoded").
 		Do().
@@ -304,7 +304,7 @@ var possibleScopesList = [...]string{
 }
 
 func getOauth2TokenSource(ctx context.Context, opts options.GoogleOptions, scope string) oauth2.TokenSource {
-	if opts.UseApplicationDefaultCredentials {
+	if ptr.Deref(opts.UseApplicationDefaultCredentials, options.DefaultUseApplicationDefaultCredentials) {
 		ts, err := impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
 			TargetPrincipal: getTargetPrincipal(ctx, opts),
 			Scopes:          strings.Split(scope, " "),
@@ -543,7 +543,7 @@ func (p *GoogleProvider) redeemRefreshToken(ctx context.Context, s *sessions.Ses
 
 	err = requests.New(p.RedeemURL.String()).
 		WithContext(ctx).
-		WithMethod("POST").
+		WithMethod(http.MethodPost).
 		WithBody(bytes.NewBufferString(params.Encode())).
 		SetHeader("Content-Type", "application/x-www-form-urlencoded").
 		Do().

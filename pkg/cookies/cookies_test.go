@@ -5,9 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
-
 	middlewareapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/middleware"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/ip"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -15,7 +14,10 @@ import (
 var _ = Describe("Cookie Tests", func() {
 	Context("GetCookieDomain", func() {
 		type getCookieDomainTableInput struct {
-			host           string
+			host string
+			// rawHost sets req.Host after the request is built, for values a
+			// URL cannot carry, such as a host whose port part is not numeric.
+			rawHost        string
 			xForwardedHost string
 			cookieDomains  []string
 			expectedOutput string
@@ -30,10 +32,19 @@ var _ = Describe("Cookie Tests", func() {
 				)
 				Expect(err).ToNot(HaveOccurred())
 
+				if in.rawHost != "" {
+					req.Host = in.rawHost
+				}
+
 				if in.xForwardedHost != "" {
 					req.Header.Add("X-Forwarded-Host", in.xForwardedHost)
+					req.RemoteAddr = "127.0.0.1:4180"
+					trustedProxies, err := ip.ParseNetSet([]string{"127.0.0.1"})
+					Expect(err).ToNot(HaveOccurred())
+
 					req = middlewareapi.AddRequestScope(req, &middlewareapi.RequestScope{
-						ReverseProxy: true,
+						ReverseProxy:   true,
+						TrustedProxies: trustedProxies,
 					})
 				}
 
@@ -76,22 +87,63 @@ var _ = Describe("Cookie Tests", func() {
 				cookieDomains:  []string{".cookies.wrong", ".cookies.false"},
 				expectedOutput: "",
 			}),
+			Entry("a Host header carrying a port", getCookieDomainTableInput{
+				host:           "www.cookies.test:443",
+				cookieDomains:  []string{".cookies.test"},
+				expectedOutput: ".cookies.test",
+			}),
+			Entry("an X-Forwarded-Host header carrying a port", getCookieDomainTableInput{
+				host:           "backend.cookies.internal",
+				xForwardedHost: "www.cookies.test:443",
+				cookieDomains:  []string{".cookies.test"},
+				expectedOutput: ".cookies.test",
+			}),
+			Entry("a non-standard port", getCookieDomainTableInput{
+				host:           "www.cookies.test:8443",
+				cookieDomains:  []string{".cookies.test"},
+				expectedOutput: ".cookies.test",
+			}),
+			Entry("a host with a port that matches no domain", getCookieDomainTableInput{
+				host:           "www.example.com:443",
+				cookieDomains:  []string{".cookies.test"},
+				expectedOutput: "",
+			}),
+			Entry("a Host header whose port part looks like a cookie domain", getCookieDomainTableInput{
+				host:           "backend.cookies.internal",
+				rawHost:        "evil.com:.cookies.test",
+				cookieDomains:  []string{".cookies.test"},
+				expectedOutput: "",
+			}),
+			Entry("a Host header whose port part ends in a cookie domain", getCookieDomainTableInput{
+				host:           "backend.cookies.internal",
+				rawHost:        "evil.com:443.cookies.test",
+				cookieDomains:  []string{".cookies.test"},
+				expectedOutput: "",
+			}),
+			Entry("an X-Forwarded-Host header whose port part looks like a cookie domain", getCookieDomainTableInput{
+				host:           "backend.cookies.internal",
+				xForwardedHost: "evil.com:.cookies.test",
+				cookieDomains:  []string{".cookies.test"},
+				expectedOutput: "",
+			}),
+			Entry("an X-Forwarded-Host header whose port part ends in a cookie domain", getCookieDomainTableInput{
+				host:           "backend.cookies.internal",
+				xForwardedHost: "evil.com:443.cookies.test",
+				cookieDomains:  []string{".cookies.test"},
+				expectedOutput: "",
+			}),
 		)
 	})
 
 	Context("MakeCookieFromOptions", func() {
 		type makeCookieFromOptionsTableInput struct {
 			host           string
-			name           string
-			value          string
-			opts           options.Cookie
-			expiration     time.Duration
+			opts           CookieOptions
 			now            time.Time
 			expectedOutput int
 		}
 
 		validName := "_oauth2_proxy"
-		validSecret := "secretthirtytwobytes+abcdefghijk"
 		domains := []string{"www.cookies.test"}
 
 		now := time.Now()
@@ -106,62 +158,50 @@ var _ = Describe("Cookie Tests", func() {
 				)
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(MakeCookieFromOptions(req, in.name, in.value, &in.opts, in.expiration).MaxAge).To(Equal(in.expectedOutput))
+				Expect(MakeCookieFromOptions(req, &in.opts).MaxAge).To(Equal(in.expectedOutput))
 			},
 			Entry("persistent cookie", makeCookieFromOptionsTableInput{
-				host:  "www.cookies.test",
-				name:  validName,
-				value: "1",
-				opts: options.Cookie{
-					Name:     validName,
-					Secret:   validSecret,
-					Domains:  domains,
-					Path:     "",
-					Expire:   time.Hour,
-					Refresh:  15 * time.Minute,
-					Secure:   true,
-					HTTPOnly: false,
-					SameSite: "",
+				host: "www.cookies.test",
+				opts: CookieOptions{
+					Name:       validName,
+					Value:      "1",
+					Domains:    domains,
+					Expiration: 15 * time.Minute,
+					SameSite:   "",
+					Path:       "",
+					HTTPOnly:   false,
+					Secure:     true,
 				},
-				expiration:     15 * time.Minute,
 				now:            now,
 				expectedOutput: int((15 * time.Minute).Seconds()),
 			}),
 			Entry("persistent cookie to be cleared", makeCookieFromOptionsTableInput{
-				host:  "www.cookies.test",
-				name:  validName,
-				value: "1",
-				opts: options.Cookie{
-					Name:     validName,
-					Secret:   validSecret,
-					Domains:  domains,
-					Path:     "",
-					Expire:   time.Hour * -1,
-					Refresh:  15 * time.Minute,
-					Secure:   true,
-					HTTPOnly: false,
-					SameSite: "",
+				host: "www.cookies.test",
+				opts: CookieOptions{
+					Name:       validName,
+					Value:      "1",
+					Domains:    domains,
+					Expiration: time.Hour * -1,
+					SameSite:   "",
+					Path:       "",
+					HTTPOnly:   false,
+					Secure:     true,
 				},
-				expiration:     time.Hour * -1,
 				now:            now,
 				expectedOutput: -1,
 			}),
 			Entry("session cookie", makeCookieFromOptionsTableInput{
-				host:  "www.cookies.test",
-				name:  validName,
-				value: "1",
-				opts: options.Cookie{
-					Name:     validName,
-					Secret:   validSecret,
-					Domains:  domains,
-					Path:     "",
-					Expire:   0,
-					Refresh:  15 * time.Minute,
-					Secure:   true,
-					HTTPOnly: false,
-					SameSite: "",
+				host: "www.cookies.test",
+				opts: CookieOptions{
+					Name:       validName,
+					Value:      "1",
+					Domains:    domains,
+					Expiration: 0,
+					SameSite:   "",
+					Path:       "",
+					HTTPOnly:   false,
+					Secure:     true,
 				},
-				expiration:     0,
 				now:            now,
 				expectedOutput: expectedMaxAge,
 			}),

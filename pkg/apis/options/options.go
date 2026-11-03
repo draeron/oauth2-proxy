@@ -24,6 +24,7 @@ type Options struct {
 	ReadyPath           string   `flag:"ready-path" cfg:"ready_path"`
 	ReverseProxy        bool     `flag:"reverse-proxy" cfg:"reverse_proxy"`
 	RealClientIPHeader  string   `flag:"real-client-ip-header" cfg:"real_client_ip_header"`
+	TrustedProxyIPs     []string `flag:"trusted-proxy-ip" cfg:"trusted_proxy_ips"`
 	TrustedIPs          []string `flag:"trusted-ip" cfg:"trusted_ips"`
 	ForceHTTPS          bool     `flag:"force-https" cfg:"force_https"`
 	RawRedirectURL      string   `flag:"redirect-url" cfg:"redirect_url"`
@@ -118,8 +119,9 @@ func NewFlagSet() *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("oauth2-proxy", pflag.ExitOnError)
 
 	flagSet.Bool("reverse-proxy", false, "are we running behind a reverse proxy, controls whether headers like X-Real-Ip are accepted")
-	flagSet.String("real-client-ip-header", "X-Real-IP", "Header used to determine the real IP of the client (one of: X-Forwarded-For, X-Real-IP, X-ProxyUser-IP, X-Envoy-External-Address, or CF-Connecting-IP)")
-	flagSet.StringSlice("trusted-ip", []string{}, "list of IPs or CIDR ranges to allow to bypass authentication. WARNING: trusting by IP has inherent security flaws, read the configuration documentation for more information.")
+	flagSet.String("real-client-ip-header", "X-Real-IP", "Header used to determine the real IP of the client when the direct caller is a trusted proxy (one of: X-Forwarded-For, X-Real-IP, X-ProxyUser-IP, X-Envoy-External-Address, or CF-Connecting-IP)")
+	flagSet.StringSlice("trusted-proxy-ip", []string{}, "list of direct proxy IPs or CIDR ranges allowed to set X-Forwarded-* headers when --reverse-proxy is enabled, including every trusted proxy hop in X-Forwarded-For. Defaults to trusting all IPs for backwards compatibility.")
+	flagSet.StringSlice("trusted-ip", []string{}, "list of IPs or CIDR ranges to allow to bypass authentication. WARNING: trusting by IP has inherent security flaws; with --reverse-proxy, configure --trusted-proxy-ip and read the configuration documentation.")
 	flagSet.Bool("force-https", false, "force HTTPS redirect for HTTP requests")
 	flagSet.String("redirect-url", "", "the OAuth Redirect URL. ie: \"https://internalapp.yourcompany.com/oauth2/callback\"")
 	flagSet.Bool("relative-redirect-url", false, "allow relative OAuth Redirect URL.")
@@ -167,4 +169,24 @@ func NewFlagSet() *pflag.FlagSet {
 	flagSet.AddFlagSet(templatesFlagSet())
 
 	return flagSet
+}
+
+// EnsureDefaults configures the defaults for all options
+// to ensure no unexpected empty strings for enum types or nils for booleans
+func (o *Options) EnsureDefaults() {
+	o.Providers.EnsureDefaults()
+	o.UpstreamServers.EnsureDefaults()
+
+	for i := range o.InjectRequestHeaders {
+		o.InjectRequestHeaders[i].EnsureDefaults()
+	}
+	for i := range o.InjectResponseHeaders {
+		o.InjectResponseHeaders[i].EnsureDefaults()
+	}
+
+	// TBD: Uncomment as we add EnsureDefaults methods
+	// o.Cookie.EnsureDefaults()
+	// o.Session.EnsureDefaults()
+	// o.Templates.EnsureDefaults()
+	// o.Logging.EnsureDefaults()
 }

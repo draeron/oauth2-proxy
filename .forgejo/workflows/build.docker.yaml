@@ -1,0 +1,60 @@
+on:
+  push:
+    tags:
+    - "v*"
+
+jobs:
+  build-container-images:
+    runs-on: docker
+    container:
+      image: ghcr.io/catthehacker/ubuntu:act-24.04
+      volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: ${{ vars.BUILDX_PLATFORMS }}
+
+      - name: Setup Outbreak CA
+        run: |
+          mkdir -p /etc/ssl/certs
+          echo "${{ vars.OUTBREAK_CRT }}" > /etc/ssl/certs/outbreak.crt
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: ${{ vars.BUILDX_PLATFORMS }}
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["registry.ebola.outbreak"]
+            [registry."registry.ebola.outbreak"]
+              insecure = false
+              ca=["/etc/ssl/certs/outbreak.crt"]
+            [registry."git.tpi.outbreak"]
+              ca=["/etc/ssl/certs/outbreak.crt"]
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to Forgejo
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.FORGEJO_HOST }}
+          username: ${{ vars.FORGEJO_USERNAME }}
+          password: ${{ env.FORGEJO_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          platforms: ${{ vars.BUILDX_PLATFORMS }}
+          cache-from: type=registry,image-manifest=true,oci-mediatypes=true,ref=git.tpi.outbreak/mirrors/oauth2-proxy:buildcache
+          cache-to: type=registry,image-manifest=true,oci-mediatypes=true,ref=git.tpi.outbreak/mirrors/oauth2-proxy:buildcache,mode=max
+          tags: |
+            funktionpi/oauth-proxy:${{ github.ref_name }}
+            git.tpi.outbreak/mirrors/oauth2-proxy:${{ github.ref_name }}  

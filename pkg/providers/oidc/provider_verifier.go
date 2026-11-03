@@ -10,7 +10,7 @@ import (
 	"os"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	k8serrors "k8s.io/apimachinery/pkg/util/errors"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/requests"
 )
 
 // ProviderVerifier represents the OIDC discovery and verification process
@@ -75,7 +75,7 @@ func (p ProviderVerifierOptions) validate() error {
 	}
 
 	if len(errs) > 0 {
-		return k8serrors.NewAggregate(errs)
+		return errors.Join(errs...)
 	}
 	return nil
 }
@@ -127,6 +127,8 @@ func NewProviderVerifier(ctx context.Context, opts ProviderVerifierOptions) (Pro
 type verifierBuilder func(*oidc.Config) *oidc.IDTokenVerifier
 
 func getVerifierBuilder(ctx context.Context, opts ProviderVerifierOptions) (verifierBuilder, DiscoveryProvider, error) {
+	ctx = oidc.ClientContext(ctx, requests.DefaultHTTPClient)
+
 	if opts.SkipDiscovery {
 		var keySet oidc.KeySet
 		var err error
@@ -152,11 +154,46 @@ func getVerifierBuilder(ctx context.Context, opts ProviderVerifierOptions) (veri
 		return nil, nil, fmt.Errorf("error while discovery OIDC configuration: %w", err)
 	}
 
+	supportedSigningAlgs, err := intersectSigningAlgs(provider.SupportedSigningAlgs(), opts.SupportedSigningAlgs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error while determining supported signing algorithms: %w", err)
+	}
+
 	return newVerifierBuilder(
 		opts.IssuerURL,
 		oidc.NewRemoteKeySet(ctx, provider.Endpoints().JWKsURL),
-		provider.SupportedSigningAlgs(),
+		supportedSigningAlgs,
 	), provider, nil
+}
+
+// intersectSigningAlgs returns the intersecting list of signing algorithms from the oidc discovery
+// and the signing algorithms provided through the options.
+func intersectSigningAlgs(discoveredSigningAlgs, configuredSigningAlgs []string) ([]string, error) {
+	if len(configuredSigningAlgs) == 0 {
+		return discoveredSigningAlgs, nil
+	}
+
+	if len(discoveredSigningAlgs) == 0 {
+		return configuredSigningAlgs, nil
+	}
+
+	discovered := make(map[string]struct{}, len(discoveredSigningAlgs))
+	for _, signingAlg := range discoveredSigningAlgs {
+		discovered[signingAlg] = struct{}{}
+	}
+
+	intersection := make([]string, 0, len(configuredSigningAlgs))
+	for _, signingAlg := range configuredSigningAlgs {
+		if _, ok := discovered[signingAlg]; ok {
+			intersection = append(intersection, signingAlg)
+		}
+	}
+
+	if len(intersection) == 0 {
+		return nil, fmt.Errorf("no supported signing algorithms in common between provider and configuration: discovered=%v, configured=%v", discoveredSigningAlgs, configuredSigningAlgs)
+	}
+
+	return intersection, nil
 }
 
 // GetPublicKeyFromBytes parses a PEM-encoded public key from a byte array

@@ -1,10 +1,16 @@
 package providers
 
 import (
+	"context"
+	"net"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/oauth2-proxy/mockoidc"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/util/ptr"
 	. "github.com/onsi/gomega"
 )
 
@@ -81,7 +87,7 @@ func TestSkipOIDCDiscovery(t *testing.T) {
 		ClientSecretFile: clientSecret,
 		OIDCConfig: options.OIDCOptions{
 			IssuerURL:     msIssuerURL,
-			SkipDiscovery: true,
+			SkipDiscovery: ptr.To(true),
 		},
 	}
 
@@ -108,7 +114,7 @@ func TestURLsCorrectlyParsed(t *testing.T) {
 		RedeemURL:        msTokenURL,
 		OIDCConfig: options.OIDCOptions{
 			IssuerURL:     msIssuerURL,
-			SkipDiscovery: true,
+			SkipDiscovery: ptr.To(true),
 			JwksURL:       msKeysURL,
 		},
 	}
@@ -118,6 +124,91 @@ func TestURLsCorrectlyParsed(t *testing.T) {
 
 	g.Expect(pd.LoginURL.String()).To(Equal(msAuthURL))
 	g.Expect(pd.RedeemURL.String()).To(Equal(msTokenURL))
+}
+
+func TestEnabledSigningAlgsAreAppliedToProviderVerifier(t *testing.T) {
+	g := NewWithT(t)
+
+	m, err := mockoidc.NewServer(nil)
+	g.Expect(err).ToNot(HaveOccurred())
+	m.AddMiddleware(newSigningAlgsIssuerMiddleware(m, []string{"RS256", "HS256"}))
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(m.Start(listener, nil)).To(Succeed())
+	defer func() {
+		g.Expect(m.Shutdown()).To(Succeed())
+	}()
+
+	providerConfig := options.Provider{
+		ID:               providerID,
+		Type:             "oidc",
+		ClientID:         m.Config().ClientID,
+		ClientSecretFile: clientSecret,
+		OIDCConfig: options.OIDCOptions{
+			IssuerURL:          m.Issuer(),
+			AudienceClaims:     []string{"aud"},
+			EnabledSigningAlgs: []string{"HS256"},
+		},
+	}
+
+	pd, err := newProviderDataFromConfig(providerConfig)
+	g.Expect(err).ToNot(HaveOccurred())
+
+	rawIDToken, err := m.Keypair.SignJWT(jwt.RegisteredClaims{
+		Audience:  jwt.ClaimStrings{m.Config().ClientID},
+		Issuer:    m.Issuer(),
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		IssuedAt:  jwt.NewNumericDate(time.Now()),
+		Subject:   "user",
+	})
+	g.Expect(err).ToNot(HaveOccurred())
+
+	_, err = pd.Verifier.Verify(context.Background(), rawIDToken)
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(err.Error()).To(ContainSubstring("unexpected signature algorithm"))
+}
+
+func TestEnabledSigningAlgsRejectUnsupportedTokens(t *testing.T) {
+	g := NewWithT(t)
+
+	m, err := mockoidc.Run()
+	g.Expect(err).ToNot(HaveOccurred())
+	defer func() {
+		g.Expect(m.Shutdown()).To(Succeed())
+	}()
+
+	providerConfig := options.Provider{
+		ID:               providerID,
+		Type:             "oidc",
+		ClientID:         m.Config().ClientID,
+		ClientSecretFile: clientSecret,
+		LoginURL:         m.AuthorizationEndpoint(),
+		RedeemURL:        m.TokenEndpoint(),
+		OIDCConfig: options.OIDCOptions{
+			IssuerURL:          m.Issuer(),
+			SkipDiscovery:      ptr.To(true),
+			JwksURL:            m.JWKSEndpoint(),
+			AudienceClaims:     []string{"aud"},
+			EnabledSigningAlgs: []string{"HS256"},
+		},
+	}
+
+	pd, err := newProviderDataFromConfig(providerConfig)
+	g.Expect(err).ToNot(HaveOccurred())
+
+	rawIDToken, err := m.Keypair.SignJWT(jwt.RegisteredClaims{
+		Audience:  jwt.ClaimStrings{m.Config().ClientID},
+		Issuer:    m.Issuer(),
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		IssuedAt:  jwt.NewNumericDate(time.Now()),
+		Subject:   "user",
+	})
+	g.Expect(err).ToNot(HaveOccurred())
+
+	_, err = pd.Verifier.Verify(context.Background(), rawIDToken)
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(err.Error()).To(ContainSubstring("unexpected signature algorithm"))
 }
 
 func TestScope(t *testing.T) {
@@ -216,7 +307,7 @@ func TestScope(t *testing.T) {
 			AllowedGroups:    tc.allowedGroups,
 			OIDCConfig: options.OIDCOptions{
 				IssuerURL:     msIssuerURL,
-				SkipDiscovery: true,
+				SkipDiscovery: ptr.To(true),
 				JwksURL:       msKeysURL,
 			},
 		}
@@ -297,7 +388,7 @@ func TestEmailClaimCorrectlySet(t *testing.T) {
 				RedeemURL:        msTokenURL,
 				OIDCConfig: options.OIDCOptions{
 					IssuerURL:     msIssuerURL,
-					SkipDiscovery: true,
+					SkipDiscovery: ptr.To(true),
 					JwksURL:       msKeysURL,
 					UserIDClaim:   tc.userIDClaim,
 					EmailClaim:    tc.emailClaim,
